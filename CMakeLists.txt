@@ -1,6 +1,3 @@
-# CMakeList.txt : CMake project for FlexBase, include source and define
-# project specific logic here.
-#
 cmake_minimum_required (VERSION 3.10)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -18,7 +15,6 @@ set(DEFAULT_BUILD_TYPE "Release")
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' as none was specified.")
   set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE STRING "Choose the type of build." FORCE)
-  # Set the possible values of build type for cmake-gui
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
@@ -26,16 +22,45 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 
 option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
-option(MYLIB_BUILD_EXAMPLES "Build libcred examples" OFF)
+option(BUILD_EXAMPLES "Build libcred examples" OFF)
 
 
 SET (LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin CACHE INTERNAL "Single output directory for building all libraries.")
 
+# Build library
 include_directories("include/")
-add_library (libcred "src/libcred_win.cpp" "include/libcred.hpp")
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    add_library(libcred "src/libcred_macos.cpp" "include/libcred.hpp")
+elseif(WIN32)
+    add_library(libcred "src/libcred_win.cpp" "include/libcred.hpp")
+elseif(UNIX)
+    add_library(libcred "src/libcred_linux.cpp" "include/libcred.hpp")
+else()
+    message(FATAL_ERROR "Unknown Platform Error. Aborting...")
+endif()
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE "LIBCRED_EXPORTS=1")
+if(${BUILD_SHARED_LIBS})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE "LIBCRED_EXPORTS=1")
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE "LIBCRED_STATIC_LIB")
+endif()
 
+# Build example
+if(${BUILD_EXAMPLES})
+    add_executable(libcred_example1 "example/ex1.cpp")
+    target_link_libraries(libcred_example1 PRIVATE libcred)
+    add_executable(libcred_example2 "example/ex2.cpp")
+    target_link_libraries(libcred_example2 PRIVATE libcred)
+    if(${BUILD_SHARED_LIBS})
+        target_compile_definitions(libcred_example1 PRIVATE "LIBCRED_EXPORTS=1")
+        target_compile_definitions(libcred_example2 PRIVATE "LIBCRED_EXPORTS=1")
+    else()
+        target_compile_definitions(libcred_example1 PRIVATE "LIBCRED_STATIC_LIB")
+        target_compile_definitions(libcred_example2 PRIVATE "LIBCRED_STATIC_LIB")
+    endif()
+endif()
+
+# Install library
 install(TARGETS libcred
 	EXPORT ${PROJECT_NAME}-targets
 	ARCHIVE DESTINATION lib
@@ -65,9 +90,17 @@ if(MSVC)
         OPTIONAL)
 endif()
 
+# Install cmake config
 install(EXPORT ${PROJECT_NAME}-targets
     FILE libcred-config.cmake
     DESTINATION lib/cmake/libcred
 )
 
+# Install header
 install(FILES include/libcred.hpp DESTINATION include)
+
+# Install examples
+if(${BUILD_EXAMPLES})
+    install(TARGETS libcred_example1 RUNTIME DESTINATION bin)
+    install(TARGETS libcred_example2 RUNTIME DESTINATION bin)
+endif()

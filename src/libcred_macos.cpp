@@ -63,14 +63,18 @@ namespace libcred
                                const std::string& password,
                                std::string* error)
     {
-        OSStatus status = SecKeychainAddGenericPassword(NULL,
-                                                        service.length(),
-                                                        service.data(),
-                                                        account.length(),
-                                                        account.data(),
-                                                        password.length(),
-                                                        password.data(),
-                                                        NULL);
+        CFStringRef serviceRef = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+        CFStringRef accountRef = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFDataRef passwordDataRef = CFDataCreate(NULL, reinterpret_cast<const UInt8*>(password.c_str()), password.length());
+
+        CFMutableDictionaryRef attributes = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CFDictionaryAddValue(attributes, kSecClass, kSecClassInternetPassword);
+        CFDictionaryAddValue(attributes, kSecAttrServer, serviceRef);
+        CFDictionaryAddValue(attributes, kSecAttrAccount, accountRef);
+        CFDictionaryAddValue(attributes, kSecValueData, passwordDataRef);
+
+        // Add the item to the keychain
+        OSStatus status = SecItemAdd(attributes, NULL);
 
         if (status != errSecSuccess)
         {
@@ -86,34 +90,38 @@ namespace libcred
                                 const std::string& password,
                                 std::string* error)
     {
-        SecKeychainItemRef item;
-        OSStatus result = SecKeychainFindGenericPassword(NULL,
-                                                         service.length(),
-                                                         service.data(),
-                                                         account.length(),
-                                                         account.data(),
-                                                         NULL,
-                                                         NULL,
-                                                         &item);
+        CFStringRef cfAccount = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+        CFDataRef cfNewPassword = CFDataCreate(NULL, (const UInt8*)password.c_str(), password.length());
 
-        if (result == errSecItemNotFound)
+        const void *queryKeys[] = { kSecClass, kSecAttrAccount, kSecAttrServer };
+        const void *queryValues[] = { kSecClassInternetPassword, cfAccount, cfService };
+        CFDictionaryRef query = CFDictionaryCreate(NULL, queryKeys, queryValues, 3, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+        // Create an update dictionary with the new password
+        const void *updateKeys[] = { kSecValueData };
+        const void *updateValues[] = { cfNewPassword };
+        CFDictionaryRef update = CFDictionaryCreate(NULL, updateKeys, updateValues, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+        // Perform the update
+        OSStatus status = SecItemUpdate(query, update);
+
+        if (status == errSecItemNotFound)
         {
             return AddPassword(service, account, password, error);
         }
-        else if (result != errSecSuccess)
+        else if (status != errSecSuccess)
         {
-            *error = errorStatusToString(result);
+            *error = errorStatusToString(status);
             return FAIL_ERROR;
         }
 
-        result = SecKeychainItemModifyAttributesAndData(
-            item, NULL, password.length(), password.data());
-        CFRelease(item);
-        if (result != errSecSuccess)
-        {
-            *error = errorStatusToString(result);
-            return FAIL_ERROR;
-        }
+        // Clean up
+        CFRelease(cfAccount);
+        CFRelease(cfService);
+        CFRelease(cfNewPassword);
+        CFRelease(query);
+        CFRelease(update);
 
         return SUCCESS;
     }
@@ -123,16 +131,20 @@ namespace libcred
                                 std::string* password,
                                 std::string* error)
     {
-        void* data;
-        UInt32 length;
-        OSStatus status = SecKeychainFindGenericPassword(NULL,
-                                                         service.length(),
-                                                         service.data(),
-                                                         account.length(),
-                                                         account.data(),
-                                                         &length,
-                                                         &data,
-                                                         NULL);
+        CFStringRef cfAccount = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+
+        const void *keys[] = { kSecClass, kSecAttrAccount, kSecAttrServer, kSecReturnData, kSecMatchLimit };
+        const void *values[] = { kSecClassInternetPassword, cfAccount, cfService, kCFBooleanTrue, kSecMatchLimitOne };
+
+        CFDictionaryRef query = CFDictionaryCreate(NULL, keys, values, 5, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+        CFTypeRef result = NULL;
+        OSStatus status = SecItemCopyMatching(query, &result);
+
+        CFRelease(cfAccount);
+        CFRelease(cfService);
+        CFRelease(query);
 
         if (status == errSecItemNotFound)
         {
@@ -144,8 +156,9 @@ namespace libcred
             return FAIL_ERROR;
         }
 
-        *password = std::string(reinterpret_cast<const char*>(data), length);
-        SecKeychainItemFreeContent(NULL, data);
+        CFDataRef passwordData = (CFDataRef)result;
+        *password = std::string((const char*)CFDataGetBytePtr(passwordData), CFDataGetLength(passwordData));
+        CFRelease(passwordData);
         return SUCCESS;
     }
 
@@ -153,29 +166,29 @@ namespace libcred
                                    const std::string& account,
                                    std::string* error)
     {
-        SecKeychainItemRef item;
-        OSStatus status = SecKeychainFindGenericPassword(NULL,
-                                                         service.length(),
-                                                         service.data(),
-                                                         account.length(),
-                                                         account.data(),
-                                                         NULL,
-                                                         NULL,
-                                                         &item);
+        // Create a query dictionary to find the existing item
+        CFStringRef cfAccount = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+
+        const void *keys[] = { kSecClass, kSecAttrAccount, kSecAttrServer };
+        const void *values[] = { kSecClassInternetPassword, cfAccount, cfService };
+
+        CFDictionaryRef query = CFDictionaryCreate(NULL, keys, values, 3, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+        // Perform the deletion
+        OSStatus status = SecItemDelete(query);
+
+        // Clean up
+        CFRelease(cfAccount);
+        CFRelease(cfService);
+        CFRelease(query);
+
         if (status == errSecItemNotFound)
         {
             // Item could not be found, so already deleted.
             return FAIL_NONFATAL;
         }
         else if (status != errSecSuccess)
-        {
-            *error = errorStatusToString(status);
-            return FAIL_ERROR;
-        }
-
-        status = SecKeychainItemDelete(item);
-        CFRelease(item);
-        if (status != errSecSuccess)
         {
             *error = errorStatusToString(status);
             return FAIL_ERROR;
@@ -188,12 +201,22 @@ namespace libcred
                                  std::string* password,
                                  std::string* error)
     {
-        SecKeychainItemRef item;
-        void* data;
-        UInt32 length;
+        // Create a query dictionary
+        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
 
-        OSStatus status = SecKeychainFindGenericPassword(
-            NULL, service.length(), service.data(), 0, NULL, &length, &data, &item);
+        const void *keys[] = { kSecClass, kSecAttrServer, kSecReturnData, kSecMatchLimit };
+        const void *values[] = { kSecClassInternetPassword, cfService, kCFBooleanTrue, kSecMatchLimitOne };
+
+        CFDictionaryRef query = CFDictionaryCreate(NULL, keys, values, 4, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+        // Perform the query
+        CFTypeRef result = NULL;
+        OSStatus status = SecItemCopyMatching(query, &result);
+
+        // Clean up
+        CFRelease(cfService);
+        CFRelease(query);
+
         if (status == errSecItemNotFound)
         {
             return FAIL_NONFATAL;
@@ -204,9 +227,10 @@ namespace libcred
             return FAIL_ERROR;
         }
 
-        *password = std::string(reinterpret_cast<const char*>(data), length);
-        SecKeychainItemFreeContent(NULL, data);
-        CFRelease(item);
+        CFDataRef passwordData = (CFDataRef)result;
+        *password = std::string((const char*)CFDataGetBytePtr(passwordData), CFDataGetLength(passwordData));
+        CFRelease(passwordData);
+        
         return SUCCESS;
     }
 

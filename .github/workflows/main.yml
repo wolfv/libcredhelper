@@ -19,18 +19,38 @@ jobs:
     name: Compile and run tests
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-python@v5.2.0
-        with:
-          python-version: 3.12
 
       - name: Install system deps for ubuntu
         if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt install -y gnome-keyring dbus-x11
+          sudo apt install -y gnome-keyring dbus-x11 meson ninja-build
 
-      - name: Build
+      - name: Build windows and macos
+        if: matrix.os == ('windows-test' || 'macos-latest')
         uses: BSFishy/meson-build@v1.0.3
         with:
           action: test
           directory: build
           ninja-version: 1.10.2
+
+      - name: Install mamba
+        if: matrix.os == 'ubuntu-latest'
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: .github/environment.yml
+          cache-environment: true
+          post-cleanup: "all"
+          init-shell: bash
+
+      - name: Build ubuntu
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          micromamba activate buildenv
+          export $(dbus-launch)
+          export $(echo 'somerandompass' | gnome-keyring-daemon --unlock)
+          meson setup builddir
+          cd builddir
+          ninja
+          ninja test
+          exit
+        shell: bash {0}

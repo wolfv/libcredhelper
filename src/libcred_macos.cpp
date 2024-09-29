@@ -63,11 +63,15 @@ namespace libcred
                                const std::string& password,
                                std::string* error)
     {
-        CFStringRef serviceRef = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
-        CFStringRef accountRef = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
-        CFDataRef passwordDataRef = CFDataCreate(NULL, reinterpret_cast<const UInt8*>(password.c_str()), password.length());
+        CFStringRef serviceRef
+            = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+        CFStringRef accountRef
+            = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFDataRef passwordDataRef = CFDataCreate(
+            NULL, reinterpret_cast<const UInt8*>(password.c_str()), password.length());
 
-        CFMutableDictionaryRef attributes = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CFMutableDictionaryRef attributes = CFDictionaryCreateMutable(
+            NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
         CFDictionaryAddValue(attributes, kSecClass, kSecClassInternetPassword);
         CFDictionaryAddValue(attributes, kSecAttrServer, serviceRef);
         CFDictionaryAddValue(attributes, kSecAttrAccount, accountRef);
@@ -90,18 +94,31 @@ namespace libcred
                                 const std::string& password,
                                 std::string* error)
     {
-        CFStringRef cfAccount = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
-        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
-        CFDataRef cfNewPassword = CFDataCreate(NULL, (const UInt8*)password.c_str(), password.length());
+        CFStringRef cfAccount
+            = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfService
+            = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+        CFDataRef cfNewPassword
+            = CFDataCreate(NULL, (const UInt8*) password.c_str(), password.length());
 
-        const void *queryKeys[] = { kSecClass, kSecAttrAccount, kSecAttrServer };
-        const void *queryValues[] = { kSecClassInternetPassword, cfAccount, cfService };
-        CFDictionaryRef query = CFDictionaryCreate(NULL, queryKeys, queryValues, 3, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        const void* queryKeys[] = { kSecClass, kSecAttrAccount, kSecAttrServer };
+        const void* queryValues[] = { kSecClassInternetPassword, cfAccount, cfService };
+        CFDictionaryRef query = CFDictionaryCreate(NULL,
+                                                   queryKeys,
+                                                   queryValues,
+                                                   3,
+                                                   &kCFTypeDictionaryKeyCallBacks,
+                                                   &kCFTypeDictionaryValueCallBacks);
 
         // Create an update dictionary with the new password
-        const void *updateKeys[] = { kSecValueData };
-        const void *updateValues[] = { cfNewPassword };
-        CFDictionaryRef update = CFDictionaryCreate(NULL, updateKeys, updateValues, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        const void* updateKeys[] = { kSecValueData };
+        const void* updateValues[] = { cfNewPassword };
+        CFDictionaryRef update = CFDictionaryCreate(NULL,
+                                                    updateKeys,
+                                                    updateValues,
+                                                    1,
+                                                    &kCFTypeDictionaryKeyCallBacks,
+                                                    &kCFTypeDictionaryValueCallBacks);
 
         // Perform the update
         OSStatus status = SecItemUpdate(query, update);
@@ -131,13 +148,23 @@ namespace libcred
                                 std::string* password,
                                 std::string* error)
     {
-        CFStringRef cfAccount = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
-        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfAccount
+            = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfService
+            = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
 
-        const void *keys[] = { kSecClass, kSecAttrAccount, kSecAttrServer, kSecReturnData, kSecMatchLimit };
-        const void *values[] = { kSecClassInternetPassword, cfAccount, cfService, kCFBooleanTrue, kSecMatchLimitOne };
+        const void* keys[]
+            = { kSecClass, kSecAttrAccount, kSecAttrServer, kSecReturnData, kSecMatchLimit };
+        const void* values[] = {
+            kSecClassInternetPassword, cfAccount, cfService, kCFBooleanTrue, kSecMatchLimitOne
+        };
 
-        CFDictionaryRef query = CFDictionaryCreate(NULL, keys, values, 5, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CFDictionaryRef query = CFDictionaryCreate(NULL,
+                                                   keys,
+                                                   values,
+                                                   5,
+                                                   &kCFTypeDictionaryKeyCallBacks,
+                                                   &kCFTypeDictionaryValueCallBacks);
 
         CFTypeRef result = NULL;
         OSStatus status = SecItemCopyMatching(query, &result);
@@ -156,8 +183,9 @@ namespace libcred
             return FAIL_ERROR;
         }
 
-        CFDataRef passwordData = (CFDataRef)result;
-        *password = std::string((const char*)CFDataGetBytePtr(passwordData), CFDataGetLength(passwordData));
+        CFDataRef passwordData = (CFDataRef) result;
+        *password = std::string((const char*) CFDataGetBytePtr(passwordData),
+                                CFDataGetLength(passwordData));
         CFRelease(passwordData);
         return SUCCESS;
     }
@@ -167,13 +195,20 @@ namespace libcred
                                    std::string* error)
     {
         // Create a query dictionary to find the existing item
-        CFStringRef cfAccount = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
-        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfAccount
+            = CFStringCreateWithCString(NULL, account.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfService
+            = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
 
-        const void *keys[] = { kSecClass, kSecAttrAccount, kSecAttrServer };
-        const void *values[] = { kSecClassInternetPassword, cfAccount, cfService };
+        const void* keys[] = { kSecClass, kSecAttrAccount, kSecAttrServer };
+        const void* values[] = { kSecClassInternetPassword, cfAccount, cfService };
 
-        CFDictionaryRef query = CFDictionaryCreate(NULL, keys, values, 3, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CFDictionaryRef query = CFDictionaryCreate(NULL,
+                                                   keys,
+                                                   values,
+                                                   3,
+                                                   &kCFTypeDictionaryKeyCallBacks,
+                                                   &kCFTypeDictionaryValueCallBacks);
 
         // Perform the deletion
         OSStatus status = SecItemDelete(query);
@@ -202,12 +237,19 @@ namespace libcred
                                  std::string* error)
     {
         // Create a query dictionary
-        CFStringRef cfService = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
+        CFStringRef cfService
+            = CFStringCreateWithCString(NULL, service.c_str(), kCFStringEncodingUTF8);
 
-        const void *keys[] = { kSecClass, kSecAttrServer, kSecReturnData, kSecMatchLimit };
-        const void *values[] = { kSecClassInternetPassword, cfService, kCFBooleanTrue, kSecMatchLimitOne };
+        const void* keys[] = { kSecClass, kSecAttrServer, kSecReturnData, kSecMatchLimit };
+        const void* values[]
+            = { kSecClassInternetPassword, cfService, kCFBooleanTrue, kSecMatchLimitOne };
 
-        CFDictionaryRef query = CFDictionaryCreate(NULL, keys, values, 4, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CFDictionaryRef query = CFDictionaryCreate(NULL,
+                                                   keys,
+                                                   values,
+                                                   4,
+                                                   &kCFTypeDictionaryKeyCallBacks,
+                                                   &kCFTypeDictionaryValueCallBacks);
 
         // Perform the query
         CFTypeRef result = NULL;
@@ -227,10 +269,11 @@ namespace libcred
             return FAIL_ERROR;
         }
 
-        CFDataRef passwordData = (CFDataRef)result;
-        *password = std::string((const char*)CFDataGetBytePtr(passwordData), CFDataGetLength(passwordData));
+        CFDataRef passwordData = (CFDataRef) result;
+        *password = std::string((const char*) CFDataGetBytePtr(passwordData),
+                                CFDataGetLength(passwordData));
         CFRelease(passwordData);
-        
+
         return SUCCESS;
     }
 

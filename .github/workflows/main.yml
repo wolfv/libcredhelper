@@ -23,22 +23,34 @@ jobs:
       - name: Install system deps for ubuntu
         if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt install -y gnome-keyring dbus-x11
+          sudo apt install -y gnome-keyring dbus-x11 meson ninja-build
+
+      - name: Build windows and macos
+        if: matrix.os == ('windows-test' || 'macos-latest')
+        uses: BSFishy/meson-build@v1.0.3
+        with:
+          action: test
+          directory: build
+          ninja-version: 1.10.2
 
       - name: Install mamba
-        uses: mamba-org/provision-with-micromamba@main
+        if: matrix.os == 'ubuntu-latest'
+        uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: .github/environment.yml
+          cache-environment: true
+          post-cleanup: "all"
+          init-shell: bash
 
-      - name: Build
-        shell: bash -l {0}
+      - name: Build ubuntu
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          if [[ ${{ matrix.os }} == 'ubuntu-latest' ]]; then
-            export $(dbus-launch)
-            export $(echo 'somerandompass' | gnome-keyring-daemon --unlock)
-          fi
+          micromamba activate buildenv
+          export $(dbus-launch)
+          export $(echo 'somerandompass' | gnome-keyring-daemon --unlock)
           meson setup builddir
           cd builddir
           ninja
           ninja test
-          ./ex1
+          exit
+        shell: bash {0}
